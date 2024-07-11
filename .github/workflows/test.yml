@@ -30,9 +30,4 @@ jobs:
         run: |
           git config --local user.email "noreply@github.com"
           git config --local user.name "GitHub"
-      - name: Commit changes to repository
-        run: |
-          git add index.html flora.html invertebrates.html data.html
-          git commit -m "Actualización semanal completada"
-          git push origin main
       - run: echo "🍏 This job's status is ${{ job.status }}."

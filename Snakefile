@@ -12,6 +12,7 @@ SAMPLES = subprocess.run(
 ## correctos
 rule all:
     input:
+      "metadata/report.tsv",
       ["data/raw/" + sample + ".fastq.gz" for sample in SAMPLES],
       ["data/processed/" + sample + "_fastp.fastq.gz" for sample in SAMPLES],
       "data/reference/genome.fna",
@@ -27,18 +28,20 @@ rule report:
     "code/environments/env.yml" 
   shell:
     """
-    bash {input.bash_script}
+    bash {input.bash_script} {output}
+    mv report.tsv metadata/
     """
 
 ## Primera regla para descargar los datos de forma automática,
 ## this will take some time :)
 rule download_files:
   input:
+    metadatos = "metadata/report.tsv",
     bash_script = "code/01raw_seqs_ftp_download.sh"
   output:
-      "data/raw/{sample}.fastq.gz" ## Esto es interesante, es una WildCard que selecciona todas las muestras de SAMPLES
+      "data/raw/{filename}.fastq.gz" ## Esto es interesante, es una WildCard que selecciona todas las muestras de SAMPLES
   params:
-    "{sample}.fastq.gz"
+    "{filename}.fastq.gz"
   conda:
     "code/environments/env.yml" 
   shell:
@@ -49,15 +52,18 @@ rule download_files:
 ## Procesado de los archivos con fastp
 rule fastp_processing:
   input:
-    "data/raw/{sample}.fastq.gz"
+    "data/raw/{filename}.fastq.gz"
   output:
-    "data/processed/{sample}_fastp.fastq.gz"
+    "data/processed/{filename}_fastp.fastq.gz"
+  log:
+    "logs/fastp/{filename}_fastpinfo.out"
   conda:
     "code/environments/env.yml" 
   shell:
     """
-    fastp -i {input} -o {output}
+    fastp -i {input} -o {output} 2> {log}
     rm fastp.html fastp.json 
+    truncate -s 0 {input}
     """
 
 ### Descarga del genoma de referencia
@@ -77,11 +83,11 @@ rule reference_genome:
 rule ref_genome_mapping:
   input:
     ref_genome = "data/reference/genome.fna",
-    reads = "data/processed/{sample}_fastp.fastq.gz"
+    reads = "data/processed/{filename}_fastp.fastq.gz"
   output:
-    "data/mapped_reads/{sample}.sam"
+    "data/mapped_reads/{filename}.sam"
   log:
-    "logs/SAM/{sample}_infosam.out"
+    "logs/SAM/{filename}_infosam.out"
   conda:
     "code/environments/env.yml" 
   shell:
