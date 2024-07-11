@@ -1,0 +1,38 @@
+name: Test Snakemake workflow
+run-name: ${{ github.actor }} Está testeando el workflow de Snakemake 🚀
+on: 
+  [push]
+jobs:
+  ejecutar--snakemake-workflow-especies-gc:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🎉 Esta acción es activada automáticamente por ${{ github.event_name }} event."
+      - run: echo "🐧 Esta acción está corriendo en ${{ runner.os }} server hosted por GitHub!"
+      - run: echo "🔎 El nombre de la rama es ${{ github.ref }} y tu repositorio es ${{ github.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - run: echo "💡 El ${{ github.repository }} repositorio está siendo clonado en el runner."
+      - run: echo "🖥️ El workflow está preparado para testear tu codigo en el runner."
+      - name: Lista de archivos en el repositorio
+        run: |
+          ls 
+      - name: Directorio de trabajo
+        run: |
+          pwd
+      - name: Snakemake workflow
+        uses: snakemake/snakemake-github-action@v1
+        with:
+            directory: '.'
+            snakefile: 'Snakefile'
+            args: '-n --use-conda --conda-cleanup-pkgs cache'
+            stagein: '' # additional preliminary commands to run (can be multiline)
+      - name: Configure git on runner
+        run: |
+          git config --local user.email "noreply@github.com"
+          git config --local user.name "GitHub"
+      - name: Commit changes to repository
+        run: |
+          git add index.html flora.html invertebrates.html data.html
+          git commit -m "Actualización semanal completada"
+          git push origin main
+      - run: echo "🍏 This job's status is ${{ job.status }}."
