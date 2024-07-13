@@ -8,6 +8,8 @@ SAMPLES = subprocess.run(
   text = True
   ).stdout.strip().split('\n')[1:]
 
+print(SAMPLES)
+
 ## Regla maestra que controlará que todos los outputs de las reglas están
 ## correctos
 rule all:
@@ -17,8 +19,11 @@ rule all:
       ["data/processed/" + sample + "_fastp.fastq.gz" for sample in SAMPLES],
       "data/reference/genome.fna",
       ["data/mapped_reads/" + sample + ".sam" for sample in SAMPLES],
+      ["data/mapped_reads/BAM/" + sample + ".bam" for sample in SAMPLES],
+      ["data/sortedBAM/" + sample + "_sorted.bam" for sample in SAMPLES],
+      ["data/dedupBAM/" + sample + "_sorted_dedup.bam" for sample in SAMPLES]
   
-## Descargar el reporte del ENA/EBI
+### Descargar el reporte del ENA/EBI
 rule report:
   input:
     bash_script = "code/download_ncbi_report.sh"
@@ -29,6 +34,7 @@ rule report:
   shell:
     """
     bash {input.bash_script} {output}
+    sed -n '1,4p' report.tsv -i
     mv report.tsv metadata/
     """
 
@@ -95,4 +101,70 @@ rule ref_genome_mapping:
     bwa index {input.ref_genome}
     bwa mem -a {input.ref_genome} {input.reads} > {output} 2> {log}
     """
+    
+## Transformar los archivos SAM a BAM
+rule sam_to_bam:
+  input:
+    sam_file = "data/mapped_reads/{filename}.sam"
+  output:
+    bam_file = "data/mapped_reads/BAM/{filename}.bam",
+  conda:
+    "code/environments/env.yml"
+  shell:
+    """
+    samtools view -Sb {input.sam_file} > {output.bam_file}
+    """
 
+## Ordenar los archivos BAM y obtener las estadísticas del alineamiento con el genoma de referencia
+rule sorting_bam:
+  input:
+    bam_file = "data/mapped_reads/BAM/{filename}.bam"
+  output:
+    bam_file_sorted = "data/sortedBAM/{filename}_sorted.bam"
+  log:
+    "logs/BAMflagstats/{filename}.flagstats"
+  conda:
+    "code/environments/env.yml"
+  shell:
+    """
+    samtools sort {input.bam_file} > {output.bam_file_sorted}
+
+    samtools index {output.bam_file_sorted}
+
+    samtools flagstats {output.bam_file_sorted} > {log} 
+    """
+
+## Eliminar duplicados 
+rule delete_duplicates_bam_sorted:
+  input:
+    bam_file_sorted = "data/sortedBAM/{filename}_sorted.bam"
+  output:
+    bam_file_sorted_dedup = "data/dedupBAM/{filename}_sorted_dedup.bam"
+  log:
+    "logs/BAMdedup/{filename}.dedup"
+  conda:
+    "code/environments/env.yml"
+  shell:
+    """
+    picard MarkDuplicates \
+      --INPUT {input.bam_file_sorted} \
+      --OUTPUT {output.bam_file_sorted_dedup} \
+      --METRICS_FILE {log} \
+      --ASSUME_SORTED True
+    
+    samtools index {output.bam_file_sorted_dedup} 
+    """
+
+## Variant Calling usando GATK
+
+#rule variant_call_haplotypecaller:
+#  input:
+#    bam_file_sorted = "data/sortedBAM/{filename}_sorted.bam" 
+#  output:
+#    gvcf_file = "data/GVCF/{filename}.gvcf"
+#  conda:
+#    "code/environments/env.yml"
+#  shell:
+#    """
+#    
+#    """
