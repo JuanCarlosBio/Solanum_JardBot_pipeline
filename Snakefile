@@ -8,7 +8,12 @@ SAMPLES = subprocess.run(
   text = True
   ).stdout.strip().split('\n')[1:]
 
-print(SAMPLES)
+print(
+f"""
+Estas son las muestras que has seleccionado para el WorkFlow:
+>>> {SAMPLES}
+"""
+)
 
 ## Regla maestra que controlará que todos los outputs de las reglas están
 ## correctos
@@ -21,7 +26,11 @@ rule all:
       ["data/mapped_reads/" + sample + ".sam" for sample in SAMPLES],
       ["data/mapped_reads/BAM/" + sample + ".bam" for sample in SAMPLES],
       ["data/sortedBAM/" + sample + "_sorted.bam" for sample in SAMPLES],
-      ["data/dedupBAM/" + sample + "_sorted_dedup.bam" for sample in SAMPLES]
+      ["data/dedupBAM/" + sample + "_sorted_dedup.bam" for sample in SAMPLES],
+      ["data/rgBAM/" + sample + "_sorted_dedup_rg.bam" for sample in SAMPLES],
+      "data/reference/genome.dict",
+      "data/reference/genome.fna.fai",
+      ["data/GVCF/" + sample + ".gvcf" for sample in SAMPLES]
   
 ### Descargar el reporte del ENA/EBI
 rule report:
@@ -155,16 +164,65 @@ rule delete_duplicates_bam_sorted:
     samtools index {output.bam_file_sorted_dedup} 
     """
 
-## Variant Calling usando GATK
+## Añadir RGID RGLB RGPL RGPU RGSM no se muy bien porque los BAM no tienen esta
+## info pero sin ella no puedo continuar con GATK :/
+rule add_rg_bam:
+  input:
+    bam_file_sorted_dedup = "data/dedupBAM/{filename}_sorted_dedup.bam"
+  output:
+    bam_file_rg = "data/rgBAM/{filename}_sorted_dedup_rg.bam" 
+  conda:
+    "code/environments/env.yml"
+  shell:
+    """
+    picard AddOrReplaceReadGroups \
+      I={input.bam_file_sorted_dedup} \
+      O={output.bam_file_rg} \
+      RGID=1 \
+      RGLB=lib1 \
+      RGPL=illumina \
+      RGPU=unit1 \
+      RGSM=sample
+    """
 
-#rule variant_call_haplotypecaller:
-#  input:
-#    bam_file_sorted = "data/sortedBAM/{filename}_sorted.bam" 
-#  output:
-#    gvcf_file = "data/GVCF/{filename}.gvcf"
-#  conda:
-#    "code/environments/env.yml"
-#  shell:
-#    """
-#    
-#    """
+## Preparing GATK
+rule ref_genome_gatk:
+  input:
+    reference_genome = "data/reference/genome.fna"
+  output:
+    dict_file = "data/reference/genome.dict",
+    fai_file = "data/reference/genome.fna.fai"
+  conda:
+    "code/environments/env.yml"
+  shell:
+    """
+    gatk CreateSequenceDictionary \
+      -R {input.reference_genome} \
+      -O {output.dict_file}
+    
+    samtools faidx {input.reference_genome}
+    """
+
+## Variant Calling usando GATK
+rule variant_call_haplotypecaller:
+  input:
+    reference_genome = "data/reference/genome.fna",
+    dict_file = "data/reference/genome.dict",
+    fai_file = "data/reference/genome.fna.fai",
+    bam_file_sorted = "data/rgBAM/{filename}_sorted_dedup_rg.bam"
+  output:
+    gvcf_file = "data/GVCF/{filename}.gvcf" 
+  conda:
+    "code/environments/env.yml"
+  shell:
+    """
+    samtools index {input.bam_file_sorted}
+
+    gatk HaplotypeCaller \
+      -R  {input.reference_genome} \
+      -I {input.bam_file_sorted} \
+      -O {output.gvcf_file}   \
+      -ERC GVCF   \
+      --sample-name sample
+    """
+
