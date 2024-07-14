@@ -19,12 +19,15 @@ jobs:
       - name: Directorio de trabajo
         run: |
           pwd
+      - name: Metadatos report.tsv testear 2 primeras muestras
+        run: |
+          sed 's/#sed/sed/' Snakefile
       - name: Snakemake workflow
         uses: snakemake/snakemake-github-action@v1
         with:
             directory: '.'
             snakefile: 'Snakefile'
-            args: '-n --use-conda --conda-cleanup-pkgs cache'
+            args: '-cores 1 --use-conda --conda-cleanup-pkgs cache;--cores 1 --use-conda --conda-cleanup-pkgs cache'
             stagein: '' # additional preliminary commands to run (can be multiline)
       - name: Configure git on runner
         run: |
