@@ -225,4 +225,3 @@ rule variant_call_haplotypecaller:
       -ERC GVCF   \
       --sample-name sample
     """
-
