@@ -43,7 +43,7 @@ rule report:
   shell:
     """
     bash {input.bash_script} {output}
-    sed -n '1,4p' report.tsv -i
+    sed -n '1,3p' report.tsv -i
     mv report.tsv metadata/
     """
 
